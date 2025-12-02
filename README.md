@@ -1,6 +1,6 @@
 # Shan State D3 Geo Map
 
-![screen-shot-img]("https://github.com/NoerNova/shanstate_d3_geomap/blob/main/public/images/screen-shot.png?raw=true")
+![screen-shot-img](https://github.com/NoerNova/shanstate_d3_geomap/blob/main/public/images/screen-shot.png?raw=true)
 
 ## 🚀 Getting Started
 
