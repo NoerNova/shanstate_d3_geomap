@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-rgb: 255, 255, 255;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-rgb));
+}
+
+/* D3 Map specific styles */
+.path-region {
+  cursor: pointer;
+  transition: opacity 0.2s ease-in-out, stroke 0.2s ease-in-out, stroke-width 0.2s ease-in-out;
+}
+
+.path-region:hover {
+  opacity: 0.8;
+}
+
+.path-region.is-hovered {
+  stroke: #2563eb;
+  stroke-width: 2;
+}
+
+.path-region.is-selected {
+  stroke: #0f172a;
+  stroke-width: 2.5;
+}
+
+/* Animation classes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.fadeInUp {
+  animation: fadeInUp 0.5s ease-in-out;
+}
+
+.svg-parent {
+  width: 100%;
+  height: auto;
+}
+
+.svg-parent svg {
+  width: 100%;
+  height: auto;
+}
