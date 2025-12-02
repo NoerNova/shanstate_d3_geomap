@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import * as topojson from "topojson-client";
 import { MapMeta, TopoJsonData, TownshipProperties } from "@/types";
+import { useTranslation } from "react-i18next";
+import "@/lib/i18n";
 
 interface ChoroplethMapProps {
   mapMeta: MapMeta;
@@ -37,6 +39,15 @@ const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
     width: 0,
     height: 0,
   });
+  const { t } = useTranslation();
+
+  const translateName = useCallback(
+    (value?: string | null) => {
+      if (!value) return value;
+      return t(`townships.${value}`, { defaultValue: value });
+    },
+    [t],
+  );
 
   const toTitleCase = (str: string): string => {
     return str
@@ -46,19 +57,68 @@ const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
       .join(" ");
   };
 
+  const getTranslationKey = useCallback((props: TownshipProperties) => {
+    return (
+      props.TS ||
+      props.DT ||
+      ""
+    );
+  }, []);
+
+  const getFeatureName = useCallback(
+    (props: TownshipProperties) => {
+      const key = getTranslationKey(props);
+      const translated = translateName(key);
+      return (
+        translated ||
+        props.TS ||
+        props.DT ||
+        ""
+      );
+    },
+    [getTranslationKey, translateName],
+  );
+
+  const getIdentifierKey = useCallback(
+    (props: TownshipProperties) =>
+      props.VLG_PCODE ||
+      props.VT_PCODE ||
+      props.TS_PCODE ||
+      props.DT_PCODE ||
+      props.ST_PCODE ||
+      getFeatureName(props),
+    [getFeatureName],
+  );
+
   const ready = useCallback(
     (geoData: TopoJsonData) => {
       if (!choroplethMap.current) return;
 
       d3.selectAll("svg#chart > *").remove();
 
-      const propertyField = propertyFieldMap["township"];
       const svg = d3.select(choroplethMap.current);
 
-      const topology = topojson.feature(
-        geoData,
-        geoData.objects[mapMeta.graphObjectName],
-      ) as any;
+      let features: any[] = [];
+      let mesh: any = null;
+
+      if (geoData.type === "FeatureCollection") {
+        features = geoData.features || [];
+      } else if (geoData.type === "Topology" && mapMeta.graphObjectName) {
+        const topology = topojson.feature(
+          geoData,
+          geoData.objects[mapMeta.graphObjectName],
+        ) as any;
+        features = (topology.features as any[]) || [];
+        mesh = topojson.mesh(
+          geoData,
+          geoData.objects[mapMeta.graphObjectName],
+        ) as any;
+      }
+
+      if (!features.length) {
+        console.warn("No features found for map");
+        return;
+      }
 
       const projection = d3.geoMercator();
 
@@ -74,9 +134,12 @@ const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
           bboxH || widthStyle * 0.7,
           widthStyle * 0.7,
         );
-        projection.fitSize([widthStyle, heightStyle], topology);
+        projection.fitSize(
+          [widthStyle, heightStyle],
+          { type: "FeatureCollection", features } as any,
+        );
         path = d3.geoPath(projection);
-        const bBox = path.bounds(topology);
+        const bBox = path.bounds({ type: "FeatureCollection", features } as any);
         width = +bBox[1][0];
         height = +bBox[1][1];
         svg.attr("viewBox", `0 0 ${width} ${height}`);
@@ -85,11 +148,14 @@ const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
       const viewBox = svg.attr("viewBox").split(" ");
       width = +viewBox[2];
       height = +viewBox[3];
-      projection.fitSize([width, height], topology);
+      projection.fitSize([width, height], {
+        type: "FeatureCollection",
+        features,
+      } as any);
       path = d3.geoPath(projection);
+      path.pointRadius(3);
       viewRef.current = { width, height };
 
-      const features = (topology.features as any[]) || [];
       const colorScale = d3
         .scaleSequential(d3.interpolateYlGnBu)
         .domain([0, Math.max(features.length - 1, 1)]);
@@ -97,14 +163,16 @@ const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
       const baseStrokeWidth = Math.max(width / 450, 0.75);
 
       const zoomLayer = svg.append("g").attr("class", "zoom-layer");
-      const g = zoomLayer.append("g").attr("class", mapMeta.graphObjectName);
+      const g = zoomLayer
+        .append("g")
+        .attr("class", mapMeta.graphObjectName || "geo-layer");
 
       const updateTooltip = (event: any, d: any) => {
         if (!choroplethMap.current) return;
         const [x, y] = d3.pointer(event, choroplethMap.current);
         setTooltip({
-          name: toTitleCase(d.properties[propertyField] || ""),
-          district: d.properties[propertyFieldMap["district"]],
+          name: toTitleCase(getFeatureName(d.properties) || ""),
+          district: translateName(d.properties[propertyFieldMap["district"]]),
           state: d.properties[propertyFieldMap["state"]],
           x,
           y,
@@ -117,7 +185,11 @@ const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
         .data(features)
         .join("path")
         .attr("class", "path-region")
-        .attr("fill", (_d: any, i: number) => colorScale(i))
+        .attr("fill", (d: any, i: number) => {
+          const geomType = d.geometry?.type;
+          const isPoint = geomType === "Point" || geomType === "MultiPoint";
+          return isPoint ? "#ef4444" : colorScale(i);
+        })
         .attr("d", path as any)
         .attr("stroke", "#ffffff")
         .attr("stroke-width", baseStrokeWidth)
@@ -132,25 +204,20 @@ const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
         })
         .on("click", (event: any, d: any) => {
           event.stopPropagation();
-          const name = d.properties[propertyField];
-          setSelectedRegion(name);
+          const name = getFeatureName(d.properties);
+          const key = getIdentifierKey(d.properties);
+          setSelectedRegion(String(key || name));
           onSelectTownship(d.properties as TownshipProperties);
         });
 
-      g.append("path")
-        .attr("class", "borders")
-        .attr("stroke", "#94a3b8")
-        .attr("fill", "none")
-        .attr("stroke-width", baseStrokeWidth)
-        .attr(
-          "d",
-          path(
-            topojson.mesh(
-              geoData,
-              geoData.objects[mapMeta.graphObjectName],
-            ) as any,
-          ) as any,
-        );
+      if (mesh) {
+        g.append("path")
+          .attr("class", "borders")
+          .attr("stroke", "#94a3b8")
+          .attr("fill", "none")
+          .attr("stroke-width", baseStrokeWidth)
+          .attr("d", path(mesh as any) as any);
+      }
 
       const zoomBehavior = d3
         .zoom<SVGSVGElement, unknown>()
@@ -172,7 +239,7 @@ const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
         setTooltip(null);
       });
     },
-    [mapMeta, onSelectTownship],
+    [getFeatureName, getIdentifierKey, mapMeta, onSelectTownship, translateName],
   );
 
   useEffect(() => {
@@ -196,8 +263,9 @@ const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
       const paths = d3.selectAll<SVGPathElement, any>(".path-region");
       paths.classed("is-selected", function (d: any) {
         const node = this as SVGPathElement;
+        const key = getIdentifierKey(d.properties);
         const isSelected =
-          name && d.properties[propertyFieldMap["township"]] === name;
+          !!(name && (String(key) === name || getFeatureName(d.properties) === name));
         if (isSelected) {
           node.parentNode?.appendChild(node);
         }
@@ -210,7 +278,7 @@ const ChoroplethMap: React.FC<ChoroplethMapProps> = ({
     } else {
       d3.selectAll(".path-region").classed("is-selected", false);
     }
-  }, [svgRenderCount, selectedRegion]);
+  }, [getFeatureName, getIdentifierKey, svgRenderCount, selectedRegion]);
 
   const handleZoomButton = (direction: "in" | "out" | "reset") => {
     if (!choroplethMap.current || !zoomRef.current) return;
