@@ -9,8 +9,12 @@ export interface MapMeta {
   name: string;
   geoDataFile: string;
   mapType: MapType;
-  graphObjectName: string;
+  graphObjectName?: string;
+  format?: 'topojson' | 'geojson';
+  description?: string;
 }
+
+export type LocaleKey = 'en' | 'my-MM' | 'shn-MM';
 
 export interface TownshipProperties {
   ST?: string;
@@ -19,6 +23,12 @@ export interface TownshipProperties {
   DT_PCODE?: string;
   TS?: string;
   TS_PCODE?: string;
+  VT?: string;
+  VT_PCODE?: string;
+  VILLAGE?: string;
+  VLG_PCODE?: string | number;
+  VT_MMR?: string;
+  VLG_MMR?: string;
   SELF_ADMIN?: string;
   ST_RG?: string;
   TS_MMR4?: string;

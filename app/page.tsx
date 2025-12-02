@@ -17,7 +17,7 @@ export default function Home() {
         </header>
 
         <div className="bg-white rounded-lg shadow-lg p-6 md:p-8 border border-slate-100">
-          <MapExplorer mapMeta={MAP_META.Shan} />
+          <MapExplorer mapMetas={Object.values(MAP_META)} />
         </div>
 
         <footer className="mt-12 text-center text-gray-500 text-sm">
